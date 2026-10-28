@@ -33,6 +33,11 @@ pub mod h2;
 #[cfg(feature = "http3")]
 pub mod h3;
 
+/// Module that contains the DNS wire-format codec used by the DNS
+/// resolution of HTTP clients.
+#[cfg(feature = "dns")]
+pub mod dns;
+
 #[cfg(feature = "huffman")]
 mod huffman;
 

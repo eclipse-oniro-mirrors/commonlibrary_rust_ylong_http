@@ -27,6 +27,8 @@ use ylong_http::request::uri::Uri;
 #[cfg(feature = "http3")]
 use ylong_runtime::net::{ConnectedUdpSocket, UdpSocket};
 
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+use crate::async_impl::dns::OwnerAwareResolver;
 use crate::async_impl::dns::{DefaultDnsResolver, EyeBallConfig, HappyEyeballs, Resolver};
 use crate::runtime::{AsyncRead, AsyncWrite, TcpStream};
 use crate::util::config::{ConnectorConfig, HttpVersion};
@@ -62,6 +64,34 @@ pub struct HttpConnector {
 impl HttpConnector {
     /// Creates a new `HttpConnector` with a `ConnectorConfig`.
     pub(crate) fn new(config: ConnectorConfig, resolver: Arc<dyn Resolver>) -> Self {
+        // When the client is configured with `sockets_owner`, DNS resolution
+        // switches to the owner-aware resolver so that DNS sockets are owned
+        // by the configured uid/gid, mirroring the TCP `connect_with_owner`
+        // gating. An explicitly set `dns_resolver` always wins over the
+        // owner-aware switch, and the owner-aware resolver prefers the
+        // `dns_servers` override over the system resolver configuration.
+        #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+        let resolver: Arc<dyn Resolver> = if !config.resolver_customized {
+            match &config.fchown {
+                Some(fchown) => {
+                    let mut resolver = OwnerAwareResolver::new(fchown.uid, fchown.gid)
+                        .with_dns_servers(config.dns_servers.clone());
+                    if let Some(port) = config.dns_port {
+                        resolver = resolver.with_dns_port(port);
+                    }
+                    if let Some(timeout) = config.dns_timeout {
+                        resolver = resolver.with_dns_timeout(timeout);
+                    }
+                    if let Some(attempts) = config.dns_attempts {
+                        resolver = resolver.with_dns_attempts(attempts);
+                    }
+                    Arc::new(resolver)
+                }
+                None => resolver,
+            }
+        } else {
+            resolver
+        };
         Self { config, resolver }
     }
 
@@ -256,10 +286,12 @@ mod tls {
     use std::fmt::{Debug, Display, Formatter};
     use std::io::{Error, ErrorKind, Write};
     use std::time::Instant;
+
     use ylong_http::request::uri::{Scheme, Uri};
-    use super::{eyeballs_connect, Connector, HttpConnector};
+
     #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
     use super::eyeballs_connect_with_owner;
+    use super::{eyeballs_connect, Connector, HttpConnector};
     use crate::async_impl::connector::dns_query;
     use crate::async_impl::connector::stream::HttpStream;
     use crate::async_impl::mix::MixStream;
@@ -410,13 +442,13 @@ mod tls {
                         let socket_addrs = dns_query(resolver, addr.as_str()).await?;
                         time_group.set_dns_end(Instant::now());
                         time_group.set_tcp_start(Instant::now());
-                        #[cfg(not(all(target_os = "linux", feature = "ylong_base", feature = "__tls")))]
-                        let stream = eyeballs_connect(socket_addrs, timeout).await?;
-                        #[cfg(all(
+                        #[cfg(not(all(
                             target_os = "linux",
                             feature = "ylong_base",
-                            feature = "__tls",
-                        ))]
+                            feature = "__tls"
+                        )))]
+                        let stream = eyeballs_connect(socket_addrs, timeout).await?;
+                        #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls",))]
                         let stream = if let Some(fchown) = fchown {
                             eyeballs_connect_with_owner(
                                 socket_addrs,

@@ -39,7 +39,7 @@ tokio_base = ["tokio", "ylong_http/tokio_base"]                  # Uses tokio ru
 ylong_base = ["ylong_runtime", "ylong_http/ylong_base"]          # Uses ylong runtime.
 
 tls_default = ["c_openssl_3_0"]
-__tls = []                              # Not open to user, only mark to use tls for developer.
+__tls = ["ylong_http/dns", "libc"]       # Not open to user, only mark to use tls for developer.
 __c_openssl = ["__tls", "libc"]         # Not open to user, only mark to use tls by C-openssl for developer.
 c_openssl_1_1 = ["__c_openssl"]         # Uses TLS by FFI of C-openssl 1.1.
 c_openssl_3_0 = ["__c_openssl"]         # Uses TLS by FFI of C-openssl 3.0.

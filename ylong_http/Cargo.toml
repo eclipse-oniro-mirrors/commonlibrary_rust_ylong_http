@@ -20,6 +20,7 @@ http1_1 = []        # Uses HTTP/1.1.
 http2 = []          # Uses HTTP/2.
 http3 = []          # Uses HTTP/3.
 huffman = []        # Uses Huffman encoding in `Hpack` and `Qpack`.
+dns = []            # Uses the DNS wire-format codec.
 
 tokio_base = ["tokio"]     # Uses asynchronous components of `tokio`
 ylong_base = ["ylong_runtime"]            # Uses asynchronous components of `ylong`
