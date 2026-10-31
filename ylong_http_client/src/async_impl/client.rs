@@ -12,6 +12,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+use std::time::Duration;
 
 use ylong_http::request::uri::Uri;
 
@@ -327,6 +329,27 @@ pub struct ClientBuilder {
     /// Fchown configuration.
     fchown: Option<FchownConfig>,
 
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    /// DNS servers override for the owner-aware resolver.
+    dns_servers: Option<Vec<String>>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    /// DNS port for the owner-aware resolver server override.
+    dns_port: Option<u16>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    /// DNS total-budget override for the owner-aware resolver.
+    dns_timeout: Option<Duration>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    /// DNS round-count override for the owner-aware resolver.
+    dns_attempts: Option<u32>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    /// Whether `dns_resolver` was explicitly set: an explicit resolver wins
+    /// over the owner-aware resolver switch.
+    resolver_explicit: bool,
+
     /// Interceptor for all stages.
     interceptors: Arc<Interceptors>,
     /// Resolver to http DNS.
@@ -354,6 +377,16 @@ impl ClientBuilder {
             proxies: Proxies::default(),
             #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
             fchown: None,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_servers: None,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_port: None,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_timeout: None,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_attempts: None,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            resolver_explicit: false,
             interceptors: Arc::new(IdleInterceptor),
             resolver: Arc::new(DefaultDnsResolver::default()),
             #[cfg(feature = "__tls")]
@@ -460,6 +493,94 @@ impl ClientBuilder {
     #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
     pub fn sockets_owner(mut self, uid: u32, gid: u32) -> Self {
         self.fchown = Some(FchownConfig::new(uid, gid));
+        self
+    }
+
+    /// Sets the DNS server addresses used by the owner-aware resolver.
+    ///
+    /// Takes effect only together with `sockets_owner`: the owner-aware
+    /// resolver then sends DNS queries to these servers instead of the ones
+    /// read from `/etc/resolv.conf`, so resolution targets the DNS servers
+    /// of the connected VPN. Invalid entries are skipped, and search-list
+    /// expansion is disabled in this mode.
+    ///
+    /// `build` fails with `ErrorKind::Build` when the override could never
+    /// take effect: without `sockets_owner` the owner-aware resolver is
+    /// never constructed, and a custom `dns_resolver` always shadows this
+    /// override. Failing early beats silently resolving through the system
+    /// resolver.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ylong_http_client::async_impl::ClientBuilder;
+    ///
+    /// let builder = ClientBuilder::new().dns_servers(vec!["10.0.0.2".to_string()]);
+    /// ```
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub fn dns_servers(mut self, servers: Vec<String>) -> Self {
+        self.dns_servers = Some(servers);
+        self
+    }
+
+    /// Sets the port used by the owner-aware resolver for the
+    /// `dns_servers` override. Takes effect only together with
+    /// `dns_servers`; the default is the standard DNS port (53).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ylong_http_client::async_impl::ClientBuilder;
+    ///
+    /// let builder = ClientBuilder::new().dns_port(5353);
+    /// ```
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub fn dns_port(mut self, port: u16) -> Self {
+        self.dns_port = Some(port);
+        self
+    }
+
+    /// Overrides the total DNS round budget of the owner-aware resolver
+    /// (the `resolv.conf` `timeout` equivalent), used when the
+    /// `dns_servers` override is active. Takes effect only together with
+    /// `sockets_owner` and `dns_servers`; the default is the musl value
+    /// (5 seconds). The value is used as given: the `resolv.conf` option
+    /// caps do not apply to this override. A zero timeout zeroes the
+    /// exchange window and makes every resolution fail at once.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    ///
+    /// use ylong_http_client::async_impl::ClientBuilder;
+    ///
+    /// let builder = ClientBuilder::new().dns_timeout(Duration::from_secs(4));
+    /// ```
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub fn dns_timeout(mut self, timeout: Duration) -> Self {
+        self.dns_timeout = Some(timeout);
+        self
+    }
+
+    /// Overrides the DNS round count of the owner-aware resolver (the
+    /// `resolv.conf` `attempts` equivalent), used when the `dns_servers`
+    /// override is active. Takes effect only together with `sockets_owner`
+    /// and `dns_servers`; the default is the musl value (2). The value is
+    /// used as given and is not capped by the `resolv.conf` option limits;
+    /// a zero value is treated as one round by the exchange loop's
+    /// division guard, not as a fast failure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ylong_http_client::async_impl::ClientBuilder;
+    ///
+    /// let builder = ClientBuilder::new().dns_attempts(2);
+    /// ```
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub fn dns_attempts(mut self, attempts: u32) -> Self {
+        self.dns_attempts = Some(attempts);
         self
     }
 
@@ -600,6 +721,10 @@ impl ClientBuilder {
         R: Resolver,
     {
         self.resolver = Arc::new(resolver);
+        #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+        {
+            self.resolver_explicit = true;
+        }
         self
     }
 
@@ -615,6 +740,19 @@ impl ClientBuilder {
     pub fn build(self) -> Result<Client<HttpConnector>, HttpClientError> {
         #[cfg(feature = "__tls")]
         use crate::util::{AlpnProtocol, AlpnProtocolList};
+
+        // An override that could never take effect fails the build instead of
+        // silently resolving through the system resolver: without
+        // `sockets_owner` the owner-aware resolver is never constructed, and
+        // a custom `dns_resolver` always shadows the override.
+        #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+        if self.dns_servers.is_some() && (self.fchown.is_none() || self.resolver_explicit) {
+            return Err(HttpClientError::from_error(
+                ErrorKind::Build,
+                "dns_servers can never take effect: set sockets_owner and do \
+                 not configure a custom dns_resolver together with it",
+            ));
+        }
 
         #[cfg(feature = "__tls")]
         let origin_builder = self.tls;
@@ -640,6 +778,16 @@ impl ClientBuilder {
             proxies: self.proxies,
             #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
             fchown: self.fchown,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_servers: self.dns_servers,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_port: self.dns_port,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_timeout: self.dns_timeout,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            dns_attempts: self.dns_attempts,
+            #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+            resolver_customized: self.resolver_explicit,
             #[cfg(feature = "__tls")]
             tls: tls_builder.build()?,
             timeout: self.client.connect_timeout.clone(),
@@ -1223,6 +1371,44 @@ HJMRZVCQpSMzvHlofHSNgzWV1MX5h1CP4SGZdBDTfA==
             .proxy(Proxy::http("http://www.example.com").build().unwrap())
             .build();
         assert!(builder_proxy.is_ok());
+    }
+
+    /// UT test cases for the `dns_servers` override consistency check.
+    ///
+    /// # Brief
+    /// 1. Sets `dns_servers` without `sockets_owner`, checks that `build`
+    ///    fails with `ErrorKind::Build` instead of silently keeping the
+    ///    system resolver.
+    /// 2. Sets a custom `dns_resolver` together with the override, checks
+    ///    that `build` fails since the resolver shadows the override.
+    /// 3. Sets `sockets_owner` with the override, checks that `build`
+    ///    succeeds.
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    #[test]
+    fn ut_client_dns_servers_requires_owner() {
+        use crate::async_impl::dns::DefaultDnsResolver;
+
+        let err = Client::builder()
+            .dns_servers(vec!["10.0.0.2".to_string()])
+            .build()
+            .err()
+            .expect("build must fail: dns_servers without sockets_owner");
+        assert!(matches!(err.error_kind(), crate::error::ErrorKind::Build));
+
+        let err = Client::builder()
+            .sockets_owner(1000, 1000)
+            .dns_servers(vec!["10.0.0.2".to_string()])
+            .dns_resolver(DefaultDnsResolver::default())
+            .build()
+            .err()
+            .expect("build must fail: dns_resolver shadows dns_servers");
+        assert!(matches!(err.error_kind(), crate::error::ErrorKind::Build));
+
+        assert!(Client::builder()
+            .sockets_owner(1000, 1000)
+            .dns_servers(vec!["10.0.0.2".to_string()])
+            .build()
+            .is_ok());
     }
 
     /// UT test cases for `Client::with_connector`.

@@ -26,6 +26,7 @@ ohos_rust_static_library("ylong_http") {
     "huffman",
     "http2",
     "ylong_base",
+    "dns",
   ]
 
   sources = [ "src/lib.rs" ]
@@ -40,6 +41,7 @@ ohos_rust_unittest("rust_ylong_http_test_ut") {
     "--cfg=feature=\"huffman\"",
     "--cfg=feature=\"http2\"",
     "--cfg=feature=\"ylong_base\"",
+    "--cfg=feature=\"dns\"",
   ]
 
   sources = [ "src/lib.rs" ]

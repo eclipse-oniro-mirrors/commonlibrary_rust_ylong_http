@@ -14,6 +14,9 @@
 //! Connector configure module.
 
 #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+use std::time::Duration;
+
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
 use super::FchownConfig;
 use crate::util::proxy::Proxies;
 use crate::Timeout;
@@ -25,6 +28,21 @@ pub(crate) struct ConnectorConfig {
 
     #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
     pub(crate) fchown: Option<FchownConfig>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub(crate) dns_servers: Option<Vec<String>>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub(crate) dns_port: Option<u16>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub(crate) dns_timeout: Option<Duration>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub(crate) dns_attempts: Option<u32>,
+
+    #[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+    pub(crate) resolver_customized: bool,
 
     #[cfg(feature = "__tls")]
     pub(crate) tls: crate::util::TlsConfig,

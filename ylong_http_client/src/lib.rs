@@ -93,7 +93,7 @@ pub(crate) mod runtime {
     pub(crate) use ylong_runtime::{
         futures::poll_fn,
         io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf},
-        net::TcpStream,
+        net::{TcpStream, UdpSocket},
         spawn_blocking,
         sync::Semaphore,
         task::JoinHandle,

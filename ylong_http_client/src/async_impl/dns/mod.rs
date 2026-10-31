@@ -20,15 +20,54 @@
 //!   a custom dns resolver.
 //!
 //! - [`DefaultDnsResolver`]: Default dns resolver.
+//!
+//! # Documentation sources
+//!
+//! Two tiers of citations are used across this module. Protocol semantics
+//! cite the DNS specs as rustdoc reference links ([RFC1035] / [RFC 3596],
+//! anchor URLs defined at the end of each doc block). Behavioral parity
+//! with the system resolver cites musl source files and line ranges as
+//! plain text — resolver behavior beyond the wire format (resolv.conf
+//! grammar, retry schedules, address sorting) is ported from the musl
+//! reference rather than specified by RFC. The pure wire-format codec
+//! (query building, response parsing) lives in the `ylong_http` crate
+//! (`ylong_http::dns`) and is re-exported here as `wire`; its own docs
+//! cite the RFC sections it implements.
+//!
+//! [RFC1035]: https://datatracker.ietf.org/doc/html/rfc1035
+//! [RFC 3596]: https://datatracker.ietf.org/doc/html/rfc3596
 
 mod default;
 #[cfg(feature = "__c_openssl")]
 mod doh;
 mod happy_eyeballs;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod config;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod error;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod exchange;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod hosts;
+// Pure DNS wire-format codec (query building, response parsing), shared
+// with the sync implementation path: implemented once in the `ylong_http`
+// crate and re-exported here under a shorter alias.
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+pub(crate) use ylong_http::dns as wire;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod owner_resolver;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod query;
 mod resolver;
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod sort;
+#[cfg(all(test, target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+mod test_util;
 
 pub use default::DefaultDnsResolver;
 #[cfg(feature = "__c_openssl")]
 pub use doh::DohResolver;
 pub(crate) use happy_eyeballs::{EyeBallConfig, HappyEyeballs};
+#[cfg(all(target_os = "linux", feature = "ylong_base", feature = "__tls"))]
+pub(crate) use owner_resolver::OwnerAwareResolver;
 pub use resolver::{Addrs, Resolver, SocketFuture, StdError};
