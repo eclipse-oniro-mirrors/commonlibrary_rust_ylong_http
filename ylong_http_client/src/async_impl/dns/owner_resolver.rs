@@ -739,7 +739,13 @@ mod ut_test {
     /// UT case for `collect_answers` record collection: the A answer is
     /// parsed first, then AAAA (musl's record order), both port-filled.
     /// (The per-record TTL is consumed by the `ylong_http` wire codec's
-    /// own tests; this layer only collects addresses.)
+    /// own tests; this layer only collects addresses.) A dual-family list
+    /// is reordered by the RFC 6724 sort before returning, and that sort
+    /// probes the live routing environment (source reachability decides
+    /// `DAS_USABLE` and the matching bits), so the returned order is not
+    /// deterministic here — the assertion stays order-agnostic; the
+    /// ordering behavior itself is covered by the injected-probe cases in
+    /// `sort.rs`.
     #[test]
     fn ut_collect_records() {
         let v6 = IpAddr::from([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4]);
@@ -754,13 +760,9 @@ mod ut_test {
         let resp_aaaa = test_response(0x02, "example.com", TYPE_AAAA, &[v6], false, 0);
         match collect_answers(&Some(resp_a), &Some(resp_aaaa), 80, None) {
             CollectOutcome::Found(addrs) => {
-                assert_eq!(
-                    addrs,
-                    vec![
-                        SocketAddr::from(([10, 0, 0, 4], 80)),
-                        SocketAddr::from((v6, 80))
-                    ]
-                );
+                assert_eq!(addrs.len(), 2);
+                assert!(addrs.contains(&SocketAddr::from(([10, 0, 0, 4], 80))));
+                assert!(addrs.contains(&SocketAddr::from((v6, 80))));
             }
             _ => panic!("expected records"),
         }
