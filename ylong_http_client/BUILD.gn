@@ -20,6 +20,7 @@ ohos_rust_shared_library("ylong_http_client_inner") {
 
   crate_name = "ylong_http_client_inner"
   edition = "2021"
+  version_script = "ylong_http_client_inner.versionscript"
 
   sanitize = {
     integer_overflow = true
