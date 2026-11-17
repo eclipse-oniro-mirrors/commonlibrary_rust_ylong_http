@@ -21,6 +21,8 @@ ohos_rust_static_library("ylong_http") {
   crate_name = "ylong_http"
   edition = "2021"
 
+  rustflags = [ "-Ccodegen-units=1" ]
+
   features = [
     "http1_1",
     "huffman",

@@ -21,6 +21,8 @@ ohos_rust_shared_library("ylong_http_client_inner") {
   crate_name = "ylong_http_client_inner"
   edition = "2021"
 
+  rustflags = [ "-Ccodegen-units=1" ]
+
   sanitize = {
     integer_overflow = true
     ubsan = true
